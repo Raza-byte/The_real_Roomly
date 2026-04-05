@@ -1,5 +1,5 @@
 {
-    "name": "interior-app-backend",
+    "name": "roomly-backend",
     "version": "1.0.0",
     "description": "Interior Design App - Sprint 1 Backend",
     "main": "server.js",
