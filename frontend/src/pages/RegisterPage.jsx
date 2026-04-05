@@ -46,8 +46,8 @@ const RegisterPage = () => {
                     <div className="absolute bottom-1/4 left-0 w-80 h-80 rounded-full bg-sage-400 blur-3xl -translate-x-1/2" />
                 </div>
                 <div className="relative z-10 flex items-center gap-3">
-                    <div className="w-8 h-8 bg-sand-300 rounded-sm rotate-12" />
-                    <span className="font-display text-cream-50 text-xl font-semibold tracking-wide">Spacify</span>
+                    <img src="/logo-dark.svg" alt="Logo" className="w-8 h-8" />
+                    <span className="font-display text-cream-50 text-xl font-semibold tracking-wide">Roomly</span>
                 </div>
                 <div className="relative z-10 space-y-6">
                     <h2 className="font-display text-cream-50 text-3xl font-medium leading-relaxed">
@@ -72,7 +72,7 @@ const RegisterPage = () => {
                 <div className="w-full max-w-md animate-slide-up">
                     <div className="flex items-center gap-3 mb-10 lg:hidden">
                         <div className="w-7 h-7 bg-espresso-800 rounded-sm rotate-12" />
-                        <span className="font-display text-espresso-800 text-xl font-semibold">Spacify</span>
+                        <span className="font-display text-espresso-800 text-xl font-semibold">Roomly</span>
                     </div>
 
                     <div className="mb-8">

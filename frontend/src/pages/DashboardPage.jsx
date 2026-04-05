@@ -58,8 +58,8 @@ const DashboardPage = () => {
             <header className="bg-white border-b border-cream-200 sticky top-0 z-40">
                 <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <div className="w-7 h-7 bg-espresso-800 rounded-sm rotate-12" />
-                        <span className="font-display text-espresso-900 text-xl font-semibold">Spacify</span>
+                        <img src="/logo.svg" alt="Logo" className="w-8 h-8" />
+                        <span className="font-display text-espresso-900 text-xl font-semibold">Roomly</span>
                     </div>
                     <div className="flex items-center gap-4">
                         <div className="text-right hidden sm:block">

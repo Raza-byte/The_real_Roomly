@@ -38,8 +38,8 @@ const LoginPage = () => {
                 </div>
                 <div className="relative z-10">
                     <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-sand-300 rounded-sm rotate-12" />
-                        <span className="font-display text-cream-50 text-xl font-semibold tracking-wide">Spacify</span>
+                        <img src="/logo-dark.svg" alt="Logo" className="w-8 h-8" />
+                        <span className="font-display text-cream-50 text-xl font-semibold tracking-wide">Roomly</span>
                     </div>
                 </div>
                 <div className="relative z-10">
@@ -61,7 +61,7 @@ const LoginPage = () => {
                     {/* Mobile logo */}
                     <div className="flex items-center gap-3 mb-10 lg:hidden">
                         <div className="w-7 h-7 bg-espresso-800 rounded-sm rotate-12" />
-                        <span className="font-display text-espresso-800 text-xl font-semibold">Spacify</span>
+                        <span className="font-display text-espresso-800 text-xl font-semibold">Roomly</span>
                     </div>
 
                     <div className="mb-8">
