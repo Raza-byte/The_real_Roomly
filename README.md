@@ -1,4 +1,8 @@
 # Roomly 
+<p align="center">
+  <img src="logo.svg" alt="Roomly Logo" width="180" />
+</p>
+
 
 > An interior design application with a real-time 3D room builder — design, furnish, and preview custom spaces interactively.
 
