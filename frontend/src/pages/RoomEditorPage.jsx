@@ -18,6 +18,7 @@ const RoomEditorPage = () => {
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
     const [panelOpen, setPanelOpen] = useState(true);
+    const [viewMode, setViewMode] = useState('3d'); // '3d' | '2d'
 
     useEffect(() => {
         fetchRoom();
@@ -102,6 +103,44 @@ const RoomEditorPage = () => {
                         </svg>
                         {panelOpen ? 'Hide' : 'Show'} Panel
                     </button>
+
+                    {/* View Mode Toggle */}
+                    <div className="flex items-center bg-espresso-900 rounded-lg p-0.5 border border-espresso-700">
+                        <button
+                            id="btn-view-2d"
+                            onClick={() => setViewMode('2d')}
+                            title="2D Doorway View — for editing"
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-body text-xs font-medium transition-all ${
+                                viewMode === '2d'
+                                    ? 'bg-sand-400 text-espresso-900 shadow-sm'
+                                    : 'text-sand-400 hover:text-cream-50'
+                            }`}
+                        >
+                            {/* Door / 2D icon */}
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                    d="M3 21h18M5 21V5a2 2 0 012-2h10a2 2 0 012 2v16M9 21v-4a2 2 0 012-2h2a2 2 0 012 2v4" />
+                            </svg>
+                            2D Edit
+                        </button>
+                        <button
+                            id="btn-view-3d"
+                            onClick={() => setViewMode('3d')}
+                            title="3D View — orbit freely"
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-body text-xs font-medium transition-all ${
+                                viewMode === '3d'
+                                    ? 'bg-sand-400 text-espresso-900 shadow-sm'
+                                    : 'text-sand-400 hover:text-cream-50'
+                            }`}
+                        >
+                            {/* Cube / 3D icon */}
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                    d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" />
+                            </svg>
+                            3D View
+                        </button>
+                    </div>
                     <button
                         onClick={handleSave}
                         disabled={saving}
@@ -132,14 +171,20 @@ const RoomEditorPage = () => {
                             </div>
                         </div>
                     }>
-                        <RoomCanvas room={room} />
+                        <RoomCanvas room={room} viewMode={viewMode} />
                     </Suspense>
 
-                    {/* Orbit controls hint */}
+                    {/* Controls hint */}
                     <div className="absolute bottom-4 left-1/2 -translate-x-1/2 glass rounded-full px-4 py-2 pointer-events-none">
-                        <p className="font-body text-espresso-700 text-xs">
-                            🖱 Drag to orbit · Scroll to zoom · Right-click to pan
-                        </p>
+                        {viewMode === '2d' ? (
+                            <p className="font-body text-espresso-700 text-xs">
+                                Doorway view · Drag left/right to rotate walls · Scroll to zoom
+                            </p>
+                        ) : (
+                            <p className="font-body text-espresso-700 text-xs">
+                                Drag to orbit · Scroll to zoom · Right-click to pan
+                            </p>
+                        )}
                     </div>
                 </div>
 
