@@ -64,8 +64,8 @@ const Lighting = ({ roomHeight }) => (
     </>
 );
 
-/*  Furniture piece — upright billboard on the floor, draggable ─ */
-const FurniturePiece = ({ item, onMove, orbitRef }) => {
+/*  Furniture piece — upright billboard on the floor, draggable  */
+const FurniturePiece = ({ item, onMove, orbitRef, roomBounds }) => {
     const groupRef    = useRef(); // translates for drag
     const isDragging  = useRef(false);
     const intersectPt = useRef(new THREE.Vector3());
@@ -74,7 +74,8 @@ const FurniturePiece = ({ item, onMove, orbitRef }) => {
     const { camera, gl, raycaster } = useThree();
 
     const [texture, setTexture] = useState(null);
-    const [aspect,  setAspect]  = useState(1); // image width / height
+    const [aspect,  setAspect]  = useState(1);
+    const aspectRef = useRef(1); // ref so drag handler always reads latest aspect
 
     /* Load texture, capture natural aspect ratio */
     useEffect(() => {
@@ -82,7 +83,11 @@ const FurniturePiece = ({ item, onMove, orbitRef }) => {
         loader.load(item.src, (tex) => {
             tex.colorSpace = THREE.SRGBColorSpace;
             setTexture(tex);
-            if (tex.image) setAspect(tex.image.width / tex.image.height);
+            if (tex.image) {
+                const a = tex.image.width / tex.image.height;
+                setAspect(a);
+                aspectRef.current = a;
+            }
         });
     }, [item.src]);
 
@@ -94,7 +99,7 @@ const FurniturePiece = ({ item, onMove, orbitRef }) => {
         groupRef.current.lookAt(cam.position.x, p.y, cam.position.z);
     });
 
-    /* Global drag handlers on the canvas element */
+    /* Global drag handlers — clamp position to room bounds */
     useEffect(() => {
         const canvas = gl.domElement;
 
@@ -105,8 +110,17 @@ const FurniturePiece = ({ item, onMove, orbitRef }) => {
             const ny   = -((e.clientY - rect.top)  / rect.height) *  2 + 1;
             raycaster.setFromCamera({ x: nx, y: ny }, camera);
             if (raycaster.ray.intersectPlane(floorPlane, intersectPt.current)) {
-                groupRef.current.position.x = intersectPt.current.x;
-                groupRef.current.position.z = intersectPt.current.z;
+                // Half-size of furniture for clamping
+                const FURNITURE_H = 1.6;
+                const halfW = (FURNITURE_H * aspectRef.current) / 2;
+                const margin = 0.12; // small gap from wall
+
+                const { hw, hl } = roomBounds;
+                const clampedX = Math.max(-(hw - halfW - margin), Math.min(hw - halfW - margin, intersectPt.current.x));
+                const clampedZ = Math.max(-(hl - halfW - margin), Math.min(hl - halfW - margin, intersectPt.current.z));
+
+                groupRef.current.position.x = clampedX;
+                groupRef.current.position.z = clampedZ;
             }
         };
 
@@ -231,6 +245,7 @@ const RoomCanvas = ({ room, viewMode = '3d', furnitureItems = [], onFurnitureMov
                     item={item}
                     onMove={handleMove}
                     orbitRef={orbitRef}
+                    roomBounds={{ hw, hl }}
                 />
             ))}
 
