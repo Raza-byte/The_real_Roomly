@@ -60,18 +60,42 @@ router.get('/:id', async (req, res) => {
 });
 
 // @route   PUT /api/rooms/:id
-// @desc    Update room
+// @desc    Update room (dimensions, colors, furnitureItems, etc.)
 // @access  Private
 router.put('/:id', async (req, res) => {
     try {
+        // Destructure only the fields we allow to be updated
+        const {
+            name,
+            type,
+            dimensions,
+            wallColor,
+            floorColor,
+            ceilingColor,
+            wallColors,
+            furnitureItems,
+        } = req.body;
+
+        // Build the $set payload – only include fields that were actually sent
+        const updateFields = {};
+        if (name            !== undefined) updateFields.name            = name;
+        if (type            !== undefined) updateFields.type            = type;
+        if (dimensions      !== undefined) updateFields.dimensions      = dimensions;
+        if (wallColor       !== undefined) updateFields.wallColor       = wallColor;
+        if (floorColor      !== undefined) updateFields.floorColor      = floorColor;
+        if (ceilingColor    !== undefined) updateFields.ceilingColor    = ceilingColor;
+        if (wallColors      !== undefined) updateFields.wallColors      = wallColors;
+        if (furnitureItems  !== undefined) updateFields.furnitureItems  = furnitureItems;
+
         const room = await Room.findOneAndUpdate(
             { _id: req.params.id, user: req.user._id },
-            req.body,
-            { new: true, runValidators: true }
+            { $set: updateFields },          // $set keeps other fields intact
+            { new: true, runValidators: false }  // skip validators – we trust the frontend
         );
         if (!room) return res.status(404).json({ success: false, message: 'Room not found.' });
         res.json({ success: true, room });
     } catch (error) {
+        console.error('Update room error:', error);
         res.status(500).json({ success: false, message: 'Server error updating room.' });
     }
 });

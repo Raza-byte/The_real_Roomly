@@ -119,6 +119,10 @@ const RoomEditorPage = () => {
         try {
             const { data } = await api.get(`/rooms/${id}`);
             setRoom(data.room);
+            // Restore previously saved furniture layout
+            if (Array.isArray(data.room.furnitureItems) && data.room.furnitureItems.length > 0) {
+                setFurnitureItems(data.room.furnitureItems);
+            }
         } catch {
             navigate('/dashboard');
         } finally {
@@ -148,7 +152,8 @@ const RoomEditorPage = () => {
     const handleSave = async () => {
         setSaving(true);
         try {
-            await api.put(`/rooms/${id}`, room);
+            // Combine room settings + current furniture layout into one payload
+            await api.put(`/rooms/${id}`, { ...room, furnitureItems });
             setSaved(true);
             setTimeout(() => setSaved(false), 2500);
         } catch {

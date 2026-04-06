@@ -51,6 +51,30 @@ const roomSchema = new mongoose.Schema(
             type: String,
             default: '#FFFFFF',
         },
+
+        /* Per-wall colour overrides (front / back / left / right) */
+        wallColors: {
+            front:  { type: String, default: '' },
+            back:   { type: String, default: '' },
+            left:   { type: String, default: '' },
+            right:  { type: String, default: '' },
+        },
+
+        /* Placed furniture layout — each entry is one model instance */
+        furnitureItems: [
+            {
+                instanceId:  { type: String, required: true },
+                furnitureId: { type: String, required: true },
+                label:       { type: String, default: '' },
+                icon:        { type: String, default: '' },
+                modelPath:   { type: String, required: true },
+                x:         { type: Number, default: 0 },
+                z:         { type: Number, default: 0 },
+                positionY: { type: Number, default: 0 },
+                scale:     { type: Number, default: 1 },
+                rotationY: { type: Number, default: 0 },
+            },
+        ],
     },
     {
         timestamps: true,
