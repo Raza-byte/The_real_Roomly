@@ -170,6 +170,7 @@ const RoomEditorPage = () => {
             z:         0,
             scale:     1.0,
             rotationY: 0,
+            positionY: 0,   // vertical height offset from floor
         };
         setFurnitureItems((prev) => [...prev, newItem]);
         setSelectedId(newItem.instanceId);
@@ -199,6 +200,22 @@ const RoomEditorPage = () => {
         setFurnitureItems((prev) =>
             prev.map((f) => (f.instanceId === selectedId ? { ...f, rotationY: (value * Math.PI) / 180 } : f))
         );
+    };
+
+    const handlePositionYChange = (value) => {
+        if (!selectedId) return;
+        setFurnitureItems((prev) =>
+            prev.map((f) => (f.instanceId === selectedId ? { ...f, positionY: value } : f))
+        );
+    };
+
+    /* ── Individual wall colour ── */
+    const handleWallColorUpdate = (wall, color) => {
+        setRoom((prev) => ({
+            ...prev,
+            wallColors: { ...(prev.wallColors || {}), [wall]: color },
+        }));
+        setSaved(false);
     };
 
     const removeFurniture = (instanceId) => {
@@ -443,7 +460,6 @@ const RoomEditorPage = () => {
                                         </label>
                                         <div className="space-y-3">
                                             {[
-                                                { key: 'wallColor',    label: 'Walls'   },
                                                 { key: 'floorColor',   label: 'Floor'   },
                                                 { key: 'ceilingColor', label: 'Ceiling' },
                                             ].map(({ key, label }) => (
@@ -463,16 +479,54 @@ const RoomEditorPage = () => {
                                         </div>
                                     </div>
 
-                                    {/* Wall Presets */}
+                                    {/* Individual Wall Colors */}
                                     <div>
-                                        <label className="block font-body text-xs font-medium text-sand-400 uppercase tracking-widest mb-3">
-                                            Wall Presets
+                                        <label className="block font-body text-xs font-medium text-sand-400 uppercase tracking-widest mb-1">
+                                            Wall Colors
+                                        </label>
+                                        <p className="font-body text-xs text-sand-500 mb-3">
+                                            Set each wall independently, or use a preset below.
+                                        </p>
+                                        <div className="space-y-2.5">
+                                            {[
+                                                { wall: 'front', label: '⬆ Front Wall'  },
+                                                { wall: 'back',  label: '⬇ Back Wall'   },
+                                                { wall: 'left',  label: '⬅ Left Wall'   },
+                                                { wall: 'right', label: '➡ Right Wall'  },
+                                            ].map(({ wall, label }) => {
+                                                const currentColor = (room.wallColors || {})[wall] || room.wallColor || '#F5F0EB';
+                                                return (
+                                                    <div key={wall} className="flex items-center justify-between">
+                                                        <span className="font-body text-sm text-sand-300">{label}</span>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="font-mono text-xs text-sand-400">{currentColor}</span>
+                                                            <input
+                                                                type="color"
+                                                                value={currentColor}
+                                                                onChange={(e) => handleWallColorUpdate(wall, e.target.value)}
+                                                                className="w-8 h-8 rounded-md border border-espresso-700 cursor-pointer p-0.5 bg-transparent"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    {/* Wall Presets — applies to all 4 walls at once */}
+                                    <div>
+                                        <label className="block font-body text-xs font-medium text-sand-400 uppercase tracking-widest mb-2">
+                                            Wall Presets <span className="normal-case text-sand-500">(all walls)</span>
                                         </label>
                                         <div className="grid grid-cols-5 gap-2">
                                             {['#F5F0EB','#E8DDD0','#D4E8D4','#D0D8E8','#E8D0D0','#F0E8D4','#2C2C2C','#FFFFFF','#FFF8DC','#E0E8E4'].map((color) => (
                                                 <button
                                                     key={color}
-                                                    onClick={() => handleUpdate('wallColor', color)}
+                                                    onClick={() => {
+                                                        handleUpdate('wallColor', color);
+                                                        // also reset individual overrides so preset takes effect on all walls
+                                                        setRoom((prev) => ({ ...prev, wallColors: {}, wallColor: color }));
+                                                    }}
                                                     title={color}
                                                     className={`w-8 h-8 rounded-lg border-2 transition-all hover:scale-110 ${room.wallColor === color ? 'border-sand-400 scale-110' : 'border-espresso-700'}`}
                                                     style={{ backgroundColor: color }}
@@ -567,6 +621,17 @@ const RoomEditorPage = () => {
                                                 step={5}
                                                 unit="°"
                                                 onChange={handleRotationChange}
+                                            />
+
+                                            {/* Height lift slider */}
+                                            <LabeledSlider
+                                                label="Height (lift)"
+                                                value={selectedItem.positionY ?? 0}
+                                                min={0}
+                                                max={Math.max(0, room.dimensions.height - 0.2)}
+                                                step={0.05}
+                                                unit="m"
+                                                onChange={handlePositionYChange}
                                             />
 
                                             {/* Quick rotate buttons */}
