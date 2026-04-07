@@ -1,9 +1,9 @@
-import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
-import { Canvas, useThree, useFrame } from '@react-three/fiber';
-import { OrbitControls, PerspectiveCamera, ContactShadows } from '@react-three/drei';
+import { useRef, useEffect, useMemo, useCallback } from 'react';
+import { Canvas, useThree } from '@react-three/fiber';
+import { OrbitControls, PerspectiveCamera, ContactShadows, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 
-/*  Wall ─ */
+/* ─── Wall ─────────────────────────────────────────────────────────────── */
 const Wall = ({ position, rotation, width, height, color }) => (
     <mesh position={position} rotation={rotation} receiveShadow castShadow>
         <planeGeometry args={[width, height]} />
@@ -11,7 +11,7 @@ const Wall = ({ position, rotation, width, height, color }) => (
     </mesh>
 );
 
-/*  Floor  */
+/* ─── Floor ─────────────────────────────────────────────────────────────── */
 const Floor = ({ width, length, color }) => (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
         <planeGeometry args={[width, length]} />
@@ -19,27 +19,33 @@ const Floor = ({ width, length, color }) => (
     </mesh>
 );
 
-/*  Room box  */
-const Room3D = ({ dimensions, wallColor, floorColor, ceilingColor }) => {
+/* ─── Room box ───────────────────────────────────────────────────────────── */
+const Room3D = ({ dimensions, wallColor, wallColors = {}, floorColor, ceilingColor }) => {
     const { width, length, height } = dimensions;
     const hw = width / 2;
     const hl = length / 2;
     const hh = height / 2;
 
+    // Individual wall colours fall back to the global wallColor
+    const cFront  = wallColors.front  || wallColor;
+    const cBack   = wallColors.back   || wallColor;
+    const cLeft   = wallColors.left   || wallColor;
+    const cRight  = wallColors.right  || wallColor;
+
     return (
         <group>
             <Floor width={width} length={length} color={floorColor} />
-
             {/* Ceiling */}
             <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, height, 0]} receiveShadow>
                 <planeGeometry args={[width, length]} />
                 <meshStandardMaterial color={ceilingColor} roughness={1.0} side={THREE.DoubleSide} />
             </mesh>
 
-            <Wall position={[0, hh, -hl]} rotation={[0, 0, 0]}           width={width}  height={height} color={wallColor} />
-            <Wall position={[0, hh,  hl]} rotation={[0, Math.PI, 0]}     width={width}  height={height} color={wallColor} />
-            <Wall position={[-hw, hh, 0]} rotation={[0,  Math.PI / 2, 0]} width={length} height={height} color={wallColor} />
-            <Wall position={[ hw, hh, 0]} rotation={[0, -Math.PI / 2, 0]} width={length} height={height} color={wallColor} />
+            {/* Front / Back / Left / Right — each coloured independently */}
+            <Wall position={[0, hh, -hl]} rotation={[0, 0, 0]}            width={width}  height={height} color={cFront} />
+            <Wall position={[0, hh,  hl]} rotation={[0, Math.PI, 0]}      width={width}  height={height} color={cBack}  />
+            <Wall position={[-hw, hh, 0]} rotation={[0,  Math.PI / 2, 0]} width={length} height={height} color={cLeft}  />
+            <Wall position={[ hw, hh, 0]} rotation={[0, -Math.PI / 2, 0]} width={length} height={height} color={cRight} />
 
             <lineSegments>
                 <edgesGeometry args={[new THREE.BoxGeometry(width, height, length)]} />
@@ -49,13 +55,13 @@ const Room3D = ({ dimensions, wallColor, floorColor, ceilingColor }) => {
     );
 };
 
-/*  Lighting  */
+/* ─── Lighting ───────────────────────────────────────────────────────────── */
 const Lighting = ({ roomHeight }) => (
     <>
-        <ambientLight intensity={0.6} />
+        <ambientLight intensity={0.65} />
         <directionalLight
             position={[5, 8, 5]}
-            intensity={1.2}
+            intensity={1.3}
             castShadow
             shadow-mapSize-width={2048}
             shadow-mapSize-height={2048}
@@ -64,63 +70,85 @@ const Lighting = ({ roomHeight }) => (
     </>
 );
 
-/*  Furniture piece — upright billboard on the floor, draggable  */
-const FurniturePiece = ({ item, onMove, orbitRef, roomBounds }) => {
-    const groupRef    = useRef(); // translates for drag
+/* ─── Selection ring rendered under the selected piece ───────────────────── */
+const SelectionRing = ({ radius = 0.6 }) => (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
+        <ringGeometry args={[radius * 0.85, radius, 48]} />
+        <meshBasicMaterial color="#F5C842" transparent opacity={0.55} side={THREE.DoubleSide} />
+    </mesh>
+);
+
+/* ─── 3D GLtF furniture piece — draggable, scalable, rotatable, liftable ─── */
+const FurnitureModel3D = ({ item, onMove, onSelect, orbitRef, roomBounds, roomHeight, isSelected }) => {
+    const groupRef    = useRef();
     const isDragging  = useRef(false);
-    const intersectPt = useRef(new THREE.Vector3());
-    const floorPlane  = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), []);
+    // Ref holds the XZ half-extents of the model's footprint at the current scale.
+    // Kept as a ref (not state) so the drag handler always reads the latest value
+    // without needing to be re-registered via useEffect deps.
+    const footprintRef = useRef({ hx: 0.4, hz: 0.4 });
 
     const { camera, gl, raycaster } = useThree();
 
-    const [texture, setTexture] = useState(null);
-    const [aspect,  setAspect]  = useState(1);
-    const aspectRef = useRef(1); // ref so drag handler always reads latest aspect
+    const { scene: modelScene } = useGLTF(item.modelPath);
 
-    /* Load texture, capture natural aspect ratio */
-    useEffect(() => {
-        const loader = new THREE.TextureLoader();
-        loader.load(item.src, (tex) => {
-            tex.colorSpace = THREE.SRGBColorSpace;
-            setTexture(tex);
-            if (tex.image) {
-                const a = tex.image.width / tex.image.height;
-                setAspect(a);
-                aspectRef.current = a;
+    // Clone so multiple instances can coexist
+    const clonedScene = useMemo(() => {
+        const clone = modelScene.clone(true);
+        clone.traverse((child) => {
+            if (child.isMesh) {
+                child.castShadow    = true;
+                child.receiveShadow = true;
             }
         });
-    }, [item.src]);
+        return clone;
+    }, [modelScene]);
 
-    /* Cylindrical billboard: rotate group on Y-axis only to face camera */
-    useFrame(({ camera: cam }) => {
-        if (!groupRef.current) return;
-        const p = groupRef.current.position;
-        // lookAt makes the group's -Z face the target; with DoubleSide this is fine
-        groupRef.current.lookAt(cam.position.x, p.y, cam.position.z);
-    });
+    // Normalise: make tallest dimension = 1 world-unit
+    const normScale = useMemo(() => {
+        const box = new THREE.Box3().setFromObject(clonedScene);
+        const size = new THREE.Vector3();
+        box.getSize(size);
+        const maxDim = Math.max(size.x, size.y, size.z);
+        return maxDim > 0 ? 1.0 / maxDim : 1;
+    }, [clonedScene]);
 
-    /* Global drag handlers — clamp position to room bounds */
+    // Derive all geometry-based values in one memo so they stay consistent
+    const geo = useMemo(() => {
+        const box = new THREE.Box3().setFromObject(clonedScene);
+        const size = new THREE.Vector3();
+        box.getSize(size);
+        const sf  = normScale * (item.scale ?? 1.0);
+        const hx  = (size.x * sf) / 2;   // half X-footprint
+        const hz  = (size.z * sf) / 2;   // half Z-footprint
+        const hy  = (size.y * sf) / 2;   // half height
+        // keep footprintRef in sync so the drag handler (set up once) always
+        // reads the latest footprint without needing re-registration
+        footprintRef.current = { hx, hz };
+        return { hx, hz, hy, ringRadius: Math.max(hx, hz) * 1.15 };
+    }, [clonedScene, normScale, item.scale]);
+
+    const displayScale = normScale * (item.scale ?? 1.0);
+
+    /* ── Drag handler — registered once, reads footprintRef for live clamping ── */
     useEffect(() => {
-        const canvas = gl.domElement;
+        const canvas    = gl.domElement;
+        const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+        const pt         = new THREE.Vector3();
 
         const handleMove = (e) => {
             if (!isDragging.current || !groupRef.current) return;
             const rect = canvas.getBoundingClientRect();
-            const nx   = ((e.clientX - rect.left)  / rect.width)  *  2 - 1;
+            const nx   = ((e.clientX - rect.left) / rect.width)  *  2 - 1;
             const ny   = -((e.clientY - rect.top)  / rect.height) *  2 + 1;
             raycaster.setFromCamera({ x: nx, y: ny }, camera);
-            if (raycaster.ray.intersectPlane(floorPlane, intersectPt.current)) {
-                // Half-size of furniture for clamping
-                const FURNITURE_H = 1.6;
-                const halfW = (FURNITURE_H * aspectRef.current) / 2;
-                const margin = 0.12; // small gap from wall
-
+            if (raycaster.ray.intersectPlane(floorPlane, pt)) {
+                // Clamp so the model's full footprint stays inside the room walls
+                const { hx, hz } = footprintRef.current;
                 const { hw, hl } = roomBounds;
-                const clampedX = Math.max(-(hw - halfW - margin), Math.min(hw - halfW - margin, intersectPt.current.x));
-                const clampedZ = Math.max(-(hl - halfW - margin), Math.min(hl - halfW - margin, intersectPt.current.z));
-
-                groupRef.current.position.x = clampedX;
-                groupRef.current.position.z = clampedZ;
+                const cx = Math.max(-(hw - hx), Math.min(hw - hx, pt.x));
+                const cz = Math.max(-(hl - hz), Math.min(hl - hz, pt.z));
+                groupRef.current.position.x = cx;
+                groupRef.current.position.z = cz;
             }
         };
 
@@ -129,9 +157,8 @@ const FurniturePiece = ({ item, onMove, orbitRef, roomBounds }) => {
             isDragging.current = false;
             if (orbitRef?.current) orbitRef.current.enabled = true;
             canvas.style.cursor = '';
-            if (groupRef.current) {
+            if (groupRef.current)
                 onMove?.(item.instanceId, groupRef.current.position.x, groupRef.current.position.z);
-            }
         };
 
         canvas.addEventListener('pointermove', handleMove);
@@ -140,21 +167,29 @@ const FurniturePiece = ({ item, onMove, orbitRef, roomBounds }) => {
             canvas.removeEventListener('pointermove', handleMove);
             canvas.removeEventListener('pointerup',   handleUp);
         };
-    }, [gl, camera, raycaster, floorPlane, item.instanceId, onMove, orbitRef]);
+    }, [gl, camera, raycaster, item.instanceId, onMove, orbitRef, roomBounds]);
 
-    if (!texture) return null;
-
-    // Scale: 1.6 m tall; width follows the natural aspect ratio of the image
-    const h = 1.6;
-    const w = h * aspect;
+    // Y position: half-height (floor-grounded) + optional user vertical lift
+    // Clamped so the model cannot poke through the ceiling
+    const maxLift = Math.max(0, roomHeight - geo.hy * 2);
+    const lift    = Math.min(item.positionY ?? 0, maxLift);
+    const posY    = geo.hy + lift;
 
     return (
-        // Group sits at floor level; y = h/2 so the bottom edge is at y=0 (floor)
-        <group ref={groupRef} position={[item.x, h / 2, item.z]}>
-            <mesh
+        <group
+            ref={groupRef}
+            position={[item.x, posY, item.z]}
+            rotation={[0, item.rotationY ?? 0, 0]}
+        >
+            {isSelected && <SelectionRing radius={geo.ringRadius} />}
+
+            <primitive
+                object={clonedScene}
+                scale={[displayScale, displayScale, displayScale]}
                 onPointerDown={(e) => {
                     e.stopPropagation();
                     isDragging.current = true;
+                    onSelect?.(item.instanceId);
                     if (orbitRef?.current) orbitRef.current.enabled = false;
                     gl.domElement.style.cursor = 'grabbing';
                 }}
@@ -165,18 +200,21 @@ const FurniturePiece = ({ item, onMove, orbitRef, roomBounds }) => {
                 onPointerOut={() => {
                     if (!isDragging.current) gl.domElement.style.cursor = '';
                 }}
-            >
-                <planeGeometry args={[w, h]} />
-                {/* DoubleSide so it's visible regardless of billboard rotation */}
-                <meshBasicMaterial map={texture} transparent alphaTest={0.05} side={THREE.DoubleSide} />
-            </mesh>
+            />
         </group>
     );
 };
 
-/*  Main canvas  */
-const RoomCanvas = ({ room, viewMode = '3d', furnitureItems = [], onFurnitureMove }) => {
-    const { dimensions, wallColor, floorColor, ceilingColor } = room;
+/* ─── Main canvas ─────────────────────────────────────────────────────────── */
+const RoomCanvas = ({
+    room,
+    viewMode       = '3d',
+    furnitureItems = [],
+    selectedId,
+    onFurnitureMove,
+    onFurnitureSelect,
+}) => {
+    const { dimensions, wallColor, wallColors, floorColor, ceilingColor } = room;
     const { width, length, height } = dimensions;
     const orbitRef = useRef();
 
@@ -184,17 +222,27 @@ const RoomCanvas = ({ room, viewMode = '3d', furnitureItems = [], onFurnitureMov
 
     const camDistance3D = Math.max(width, length) * 1.4;
     const camHeight3D   = height * 1.2;
-
-    const eyeLevel = height * 0.52;
-    const hl       = length / 2;
-    const hw       = width  / 2;
+    const eyeLevel      = height * 0.52;
+    const hl            = length / 2;
+    const hw            = width  / 2;
 
     const handleMove = useCallback((instanceId, x, z) => {
         if (onFurnitureMove) onFurnitureMove(instanceId, x, z);
     }, [onFurnitureMove]);
 
+    const handleSelect = useCallback((instanceId) => {
+        if (onFurnitureSelect) onFurnitureSelect(instanceId);
+    }, [onFurnitureSelect]);
+
+
+
     return (
-        <Canvas shadows className="w-full h-full" key={viewMode}>
+        <Canvas
+            shadows
+            className="w-full h-full"
+            key={viewMode}
+            onPointerMissed={() => onFurnitureSelect?.(null)}
+        >
             {/* Camera */}
             {is2D ? (
                 <PerspectiveCamera makeDefault position={[0, eyeLevel, hl * 0.98]} fov={70} />
@@ -225,7 +273,7 @@ const RoomCanvas = ({ room, viewMode = '3d', furnitureItems = [], onFurnitureMov
                 />
             )}
 
-            {/* Scene */}
+            {/* Scene background */}
             <color attach="background" args={['#F9F3E8']} />
             <fog   attach="fog"        args={['#F9F3E8', 20, 60]} />
 
@@ -233,25 +281,29 @@ const RoomCanvas = ({ room, viewMode = '3d', furnitureItems = [], onFurnitureMov
 
             <Room3D
                 dimensions={dimensions}
-                wallColor={wallColor   || '#F5F0EB'}
-                floorColor={floorColor || '#C8A882'}
+                wallColor={wallColor       || '#F5F0EB'}
+                wallColors={wallColors     || {}}
+                floorColor={floorColor     || '#C8A882'}
                 ceilingColor={ceilingColor || '#FFFFFF'}
             />
 
-            {/* Furniture pieces */}
+            {/* 3D Furniture pieces */}
             {furnitureItems.map((item) => (
-                <FurniturePiece
+                <FurnitureModel3D
                     key={item.instanceId}
                     item={item}
                     onMove={handleMove}
+                    onSelect={handleSelect}
                     orbitRef={orbitRef}
                     roomBounds={{ hw, hl }}
+                    roomHeight={height}
+                    isSelected={item.instanceId === selectedId}
                 />
             ))}
 
             <ContactShadows
                 position={[0, -0.01, 0]}
-                opacity={is2D ? 0 : 0.15}
+                opacity={is2D ? 0 : 0.2}
                 scale={Math.max(width, length) * 2}
                 blur={2}
                 far={4}

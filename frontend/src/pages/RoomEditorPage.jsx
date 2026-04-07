@@ -4,24 +4,59 @@ import { Suspense } from 'react';
 import api from '../utils/api';
 import RoomCanvas from '../components/room/RoomCanvas';
 
-/*─ Room type labels */
+/* ─── Room type labels ──────────────────────────────────────────────────── */
 const ROOM_TYPE_LABELS = {
     living_room: 'Living Room', bedroom: 'Bedroom', kitchen: 'Kitchen',
     bathroom: 'Bathroom', office: 'Office', empty: 'Empty Room',
 };
 
-/*─ Furniture catalog (auto-loaded from ./furniture/)─ */
-const furnitureModules = import.meta.glob('./furniture/*.{jpg,jpeg,png,webp}', { eager: true });
-const FURNITURE_CATALOG = Object.entries(furnitureModules).map(([path, mod]) => {
-    const filename = path.split('/').pop().replace(/\.[^.]+$/, '');
-    const label = filename
-        .split('-')
-        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-        .join(' ');
-    return { furnitureId: filename, label, src: mod.default };
-});
+/* ─── 3D Model Catalog (served from /public/models/) ───────────────────── */
+const FURNITURE_CATALOG = [
+    {
+        furnitureId: 'sofa',
+        label:       'Sofa',
+        icon:        '🛋️',
+        modelPath:   '/models/sofa/scene.gltf',
+    },
+    {
+        furnitureId: 'modern_accent_chair',
+        label:       'Accent Chair',
+        icon:        '🪑',
+        modelPath:   '/models/modern_accent_chair_3d_showcase/scene.gltf',
+    },
+    {
+        furnitureId: 'wooden_cabinet',
+        label:       'Wooden Cabinet',
+        icon:        '🗄️',
+        modelPath:   '/models/wooden_cabinet/scene.gltf',
+    },
+    {
+        furnitureId: 'wardrobe',
+        label:       'Wardrobe',
+        icon:        '👔',
+        modelPath:   '/models/low-poly_psx_style_wardrobe_with_clothes/scene.gltf',
+    },
+    {
+        furnitureId: 'door',
+        label:       'Interior Door',
+        icon:        '🚪',
+        modelPath:   '/models/low-poly_psx_style_wooden_interior_doors_pack/scene.gltf',
+    },
+    {
+        furnitureId: 'chandelier',
+        label:       'Chandelier',
+        icon:        '💡',
+        modelPath:   '/models/chandelier/scene.gltf',
+    },
+    {
+        furnitureId: 'chandelier2',
+        label:       'Chandelier Classic',
+        icon:        '🕯️',
+        modelPath:   '/models/chandelier(1)/scene.gltf',
+    },
+];
 
-/*─ Icons─ */
+/* ─── Icons ─────────────────────────────────────────────────────────────── */
 const IconSettings = () => (
     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -35,33 +70,59 @@ const IconDesign = () => (
     </svg>
 );
 
-/* RoomEditorPage*/
-const RoomEditorPage = () => {
-    const { id }       = useParams();
-    const navigate     = useNavigate();
+/* ─── Slider with label ─────────────────────────────────────────────────── */
+const LabeledSlider = ({ label, value, min, max, step, unit = '', onChange }) => (
+    <div>
+        <div className="flex justify-between items-center mb-1.5">
+            <span className="font-body text-xs text-sand-300">{label}</span>
+            <span className="font-mono text-xs text-sand-400">{typeof value === 'number' ? (Number.isInteger(value) ? value : value.toFixed(2)) : value}{unit}</span>
+        </div>
+        <input
+            type="range"
+            min={min} max={max} step={step}
+            value={value}
+            onChange={(e) => onChange(parseFloat(e.target.value))}
+            className="w-full accent-sand-400"
+        />
+    </div>
+);
 
-    const [room,    setRoom]    = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [saving,  setSaving]  = useState(false);
-    const [saved,   setSaved]   = useState(false);
+/* ─── RoomEditorPage ─────────────────────────────────────────────────────── */
+const RoomEditorPage = () => {
+    const { id }   = useParams();
+    const navigate = useNavigate();
+
+    const [room,      setRoom]      = useState(null);
+    const [loading,   setLoading]   = useState(true);
+    const [saving,    setSaving]    = useState(false);
+    const [saved,     setSaved]     = useState(false);
     const [panelOpen, setPanelOpen] = useState(true);
 
     /* view mode: '3d' | '2d' */
-    const [viewMode,  setViewMode]  = useState('3d');
+    const [viewMode, setViewMode] = useState('3d');
 
-    /* panel tab: 'settings' | 'design' — design only available in 2D */
-    const [panelTab,  setPanelTab]  = useState('settings');
+    /* panel tab: 'settings' | 'design' */
+    const [panelTab, setPanelTab] = useState('settings');
 
-    /* furniture placed on the floor */
+    /* furniture state — each item: { instanceId, furnitureId, label, icon, modelPath, x, z, scale, rotationY } */
     const [furnitureItems, setFurnitureItems] = useState([]);
 
-    /* data */
+    /* selected furniture instance */
+    const [selectedId, setSelectedId] = useState(null);
+
+    const selectedItem = furnitureItems.find((f) => f.instanceId === selectedId) ?? null;
+
+    /* ── Data ── */
     useEffect(() => { fetchRoom(); }, [id]);
 
     const fetchRoom = async () => {
         try {
             const { data } = await api.get(`/rooms/${id}`);
             setRoom(data.room);
+            // Restore previously saved furniture layout
+            if (Array.isArray(data.room.furnitureItems) && data.room.furnitureItems.length > 0) {
+                setFurnitureItems(data.room.furnitureItems);
+            }
         } catch {
             navigate('/dashboard');
         } finally {
@@ -69,13 +130,12 @@ const RoomEditorPage = () => {
         }
     };
 
-    /* view mode switch */
+    /* ── View mode ── */
     const switchViewMode = (mode) => {
         setViewMode(mode);
-        if (mode === '3d') setPanelTab('settings'); // reset to settings in 3D
     };
 
-    /* room property handlers */
+    /* ── Room property handlers ── */
     const handleUpdate = (field, value) => {
         setRoom((prev) => ({ ...prev, [field]: value }));
         setSaved(false);
@@ -92,7 +152,8 @@ const RoomEditorPage = () => {
     const handleSave = async () => {
         setSaving(true);
         try {
-            await api.put(`/rooms/${id}`, room);
+            // Combine room settings + current furniture layout into one payload
+            await api.put(`/rooms/${id}`, { ...room, furnitureItems });
             setSaved(true);
             setTimeout(() => setSaved(false), 2500);
         } catch {
@@ -102,19 +163,24 @@ const RoomEditorPage = () => {
         }
     };
 
-    /* furniture handlers */
+    /* ── Furniture handlers ── */
     const addFurniture = (catalogItem) => {
-        setFurnitureItems((prev) => [
-            ...prev,
-            {
-                instanceId:  `${catalogItem.furnitureId}_${Date.now()}`,
-                furnitureId: catalogItem.furnitureId,
-                label:       catalogItem.label,
-                src:         catalogItem.src,
-                x: 0,
-                z: 0,
-            },
-        ]);
+        const newItem = {
+            instanceId:  `${catalogItem.furnitureId}_${Date.now()}`,
+            furnitureId: catalogItem.furnitureId,
+            label:       catalogItem.label,
+            icon:        catalogItem.icon,
+            modelPath:   catalogItem.modelPath,
+            x:         0,
+            z:         0,
+            scale:     1.0,
+            rotationY: 0,
+            positionY: 0,   // vertical height offset from floor
+        };
+        setFurnitureItems((prev) => [...prev, newItem]);
+        setSelectedId(newItem.instanceId);
+        // Switch to design tab to reveal the controls immediately
+        setPanelTab('design');
     };
 
     const handleFurnitureMove = useCallback((instanceId, x, z) => {
@@ -123,7 +189,46 @@ const RoomEditorPage = () => {
         );
     }, []);
 
-    /* loading state */
+    const handleFurnitureSelect = useCallback((instanceId) => {
+        setSelectedId(instanceId);
+    }, []);
+
+    const handleScaleChange = (value) => {
+        if (!selectedId) return;
+        setFurnitureItems((prev) =>
+            prev.map((f) => (f.instanceId === selectedId ? { ...f, scale: value } : f))
+        );
+    };
+
+    const handleRotationChange = (value) => {
+        if (!selectedId) return;
+        setFurnitureItems((prev) =>
+            prev.map((f) => (f.instanceId === selectedId ? { ...f, rotationY: (value * Math.PI) / 180 } : f))
+        );
+    };
+
+    const handlePositionYChange = (value) => {
+        if (!selectedId) return;
+        setFurnitureItems((prev) =>
+            prev.map((f) => (f.instanceId === selectedId ? { ...f, positionY: value } : f))
+        );
+    };
+
+    /* ── Individual wall colour ── */
+    const handleWallColorUpdate = (wall, color) => {
+        setRoom((prev) => ({
+            ...prev,
+            wallColors: { ...(prev.wallColors || {}), [wall]: color },
+        }));
+        setSaved(false);
+    };
+
+    const removeFurniture = (instanceId) => {
+        setFurnitureItems((prev) => prev.filter((f) => f.instanceId !== instanceId));
+        if (selectedId === instanceId) setSelectedId(null);
+    };
+
+    /* ── Loading ── */
     if (loading) {
         return (
             <div className="min-h-screen bg-espresso-900 flex items-center justify-center">
@@ -137,7 +242,11 @@ const RoomEditorPage = () => {
 
     if (!room) return null;
 
-    /*  */
+    const selectedRotationDeg = selectedItem
+        ? Math.round(((selectedItem.rotationY ?? 0) * 180) / Math.PI)
+        : 0;
+
+    /* ────────────────────────────────────── */
     return (
         <div className="h-screen bg-espresso-900 flex flex-col overflow-hidden">
 
@@ -180,7 +289,7 @@ const RoomEditorPage = () => {
                         <button
                             id="btn-view-2d"
                             onClick={() => switchViewMode('2d')}
-                            title="2D Doorway View — for editing"
+                            title="2D Doorway View"
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-body text-xs font-medium transition-all ${
                                 viewMode === '2d'
                                     ? 'bg-sand-400 text-espresso-900 shadow-sm'
@@ -196,7 +305,7 @@ const RoomEditorPage = () => {
                         <button
                             id="btn-view-3d"
                             onClick={() => switchViewMode('3d')}
-                            title="3D View — orbit freely"
+                            title="3D View"
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-body text-xs font-medium transition-all ${
                                 viewMode === '3d'
                                     ? 'bg-sand-400 text-espresso-900 shadow-sm'
@@ -241,7 +350,7 @@ const RoomEditorPage = () => {
                         <div className="absolute inset-0 flex items-center justify-center bg-espresso-900">
                             <div className="text-center">
                                 <div className="w-8 h-8 border-2 border-sand-400 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-                                <p className="font-body text-sand-400 text-xs tracking-widest uppercase">Rendering Room</p>
+                                <p className="font-body text-sand-400 text-xs tracking-widest uppercase">Loading Models</p>
                             </div>
                         </div>
                     }>
@@ -249,7 +358,9 @@ const RoomEditorPage = () => {
                             room={room}
                             viewMode={viewMode}
                             furnitureItems={furnitureItems}
+                            selectedId={selectedId}
                             onFurnitureMove={handleFurnitureMove}
+                            onFurnitureSelect={handleFurnitureSelect}
                         />
                     </Suspense>
 
@@ -261,7 +372,7 @@ const RoomEditorPage = () => {
                             </p>
                         ) : (
                             <p className="font-body text-espresso-700 text-xs">
-                                Drag to orbit · Scroll to zoom · Right-click to pan
+                                Drag to orbit · Scroll to zoom · Click furniture to select
                             </p>
                         )}
                     </div>
@@ -285,20 +396,18 @@ const RoomEditorPage = () => {
                                 Room Settings
                             </button>
 
-                            {/* Design tab — only in 2D editing mode */}
-                            {viewMode === '2d' && (
-                                <button
-                                    onClick={() => setPanelTab('design')}
-                                    className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-body font-medium transition-all border-b-2 ${
-                                        panelTab === 'design'
-                                            ? 'border-sand-400 text-cream-50'
-                                            : 'border-transparent text-sand-400 hover:text-sand-200'
-                                    }`}
-                                >
-                                    <IconDesign />
-                                    Design
-                                </button>
-                            )}
+                            {/* Design tab — available in both modes */}
+                            <button
+                                onClick={() => setPanelTab('design')}
+                                className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-body font-medium transition-all border-b-2 ${
+                                    panelTab === 'design'
+                                        ? 'border-sand-400 text-cream-50'
+                                        : 'border-transparent text-sand-400 hover:text-sand-200'
+                                }`}
+                            >
+                                <IconDesign />
+                                Furniture
+                            </button>
                         </div>
 
                         {/* Tab Content */}
@@ -356,7 +465,6 @@ const RoomEditorPage = () => {
                                         </label>
                                         <div className="space-y-3">
                                             {[
-                                                { key: 'wallColor',    label: 'Walls'   },
                                                 { key: 'floorColor',   label: 'Floor'   },
                                                 { key: 'ceilingColor', label: 'Ceiling' },
                                             ].map(({ key, label }) => (
@@ -376,16 +484,54 @@ const RoomEditorPage = () => {
                                         </div>
                                     </div>
 
-                                    {/* Wall Presets */}
+                                    {/* Individual Wall Colors */}
                                     <div>
-                                        <label className="block font-body text-xs font-medium text-sand-400 uppercase tracking-widest mb-3">
-                                            Wall Presets
+                                        <label className="block font-body text-xs font-medium text-sand-400 uppercase tracking-widest mb-1">
+                                            Wall Colors
+                                        </label>
+                                        <p className="font-body text-xs text-sand-500 mb-3">
+                                            Set each wall independently, or use a preset below.
+                                        </p>
+                                        <div className="space-y-2.5">
+                                            {[
+                                                { wall: 'front', label: '⬆ Front Wall'  },
+                                                { wall: 'back',  label: '⬇ Back Wall'   },
+                                                { wall: 'left',  label: '⬅ Left Wall'   },
+                                                { wall: 'right', label: '➡ Right Wall'  },
+                                            ].map(({ wall, label }) => {
+                                                const currentColor = (room.wallColors || {})[wall] || room.wallColor || '#F5F0EB';
+                                                return (
+                                                    <div key={wall} className="flex items-center justify-between">
+                                                        <span className="font-body text-sm text-sand-300">{label}</span>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="font-mono text-xs text-sand-400">{currentColor}</span>
+                                                            <input
+                                                                type="color"
+                                                                value={currentColor}
+                                                                onChange={(e) => handleWallColorUpdate(wall, e.target.value)}
+                                                                className="w-8 h-8 rounded-md border border-espresso-700 cursor-pointer p-0.5 bg-transparent"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    {/* Wall Presets — applies to all 4 walls at once */}
+                                    <div>
+                                        <label className="block font-body text-xs font-medium text-sand-400 uppercase tracking-widest mb-2">
+                                            Wall Presets <span className="normal-case text-sand-500">(all walls)</span>
                                         </label>
                                         <div className="grid grid-cols-5 gap-2">
                                             {['#F5F0EB','#E8DDD0','#D4E8D4','#D0D8E8','#E8D0D0','#F0E8D4','#2C2C2C','#FFFFFF','#FFF8DC','#E0E8E4'].map((color) => (
                                                 <button
                                                     key={color}
-                                                    onClick={() => handleUpdate('wallColor', color)}
+                                                    onClick={() => {
+                                                        handleUpdate('wallColor', color);
+                                                        // also reset individual overrides so preset takes effect on all walls
+                                                        setRoom((prev) => ({ ...prev, wallColors: {}, wallColor: color }));
+                                                    }}
                                                     title={color}
                                                     className={`w-8 h-8 rounded-lg border-2 transition-all hover:scale-110 ${room.wallColor === color ? 'border-sand-400 scale-110' : 'border-espresso-700'}`}
                                                     style={{ backgroundColor: color }}
@@ -437,18 +583,99 @@ const RoomEditorPage = () => {
                                 </div>
                             )}
 
-                            {/* ════ DESIGN TAB (2D only) ════ */}
-                            {panelTab === 'design' && viewMode === '2d' && (
+                            {/* ════ DESIGN / FURNITURE TAB ════ */}
+                            {panelTab === 'design' && (
                                 <div className="p-5 space-y-5">
 
-                                    <div>
-                                        <p className="font-body text-xs font-medium text-sand-400 uppercase tracking-widest mb-1">
-                                            Furniture
-                                        </p>
-                                        <p className="font-body text-xs text-sand-400 mb-4">
-                                            Click an item to place it on the floor. Drag to reposition.
-                                        </p>
+                                    {/* ── Selected item controls ── */}
+                                    {selectedItem ? (
+                                        <div className="bg-espresso-900 rounded-xl p-4 space-y-4 border border-sand-400/20">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-lg">{selectedItem.icon}</span>
+                                                    <div>
+                                                        <p className="font-body text-xs font-semibold text-cream-50">{selectedItem.label}</p>
+                                                        <p className="font-body text-xs text-sand-400">Selected</p>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => removeFurniture(selectedItem.instanceId)}
+                                                    className="text-sand-400 hover:text-red-400 transition-colors p-1 rounded"
+                                                    title="Remove from room"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                    </svg>
+                                                </button>
+                                            </div>
 
+                                            <LabeledSlider
+                                                label="Scale"
+                                                value={selectedItem.scale ?? 1.0}
+                                                min={0.2}
+                                                max={4.0}
+                                                step={0.05}
+                                                onChange={handleScaleChange}
+                                            />
+
+                                            <LabeledSlider
+                                                label="Rotation"
+                                                value={selectedRotationDeg}
+                                                min={0}
+                                                max={360}
+                                                step={5}
+                                                unit="°"
+                                                onChange={handleRotationChange}
+                                            />
+
+                                            {/* Height lift slider */}
+                                            <LabeledSlider
+                                                label="Height (lift)"
+                                                value={selectedItem.positionY ?? 0}
+                                                min={0}
+                                                max={Math.max(0, room.dimensions.height - 0.2)}
+                                                step={0.05}
+                                                unit="m"
+                                                onChange={handlePositionYChange}
+                                            />
+
+                                            {/* Quick rotate buttons */}
+                                            <div className="flex gap-2">
+                                                {[0, 90, 180, 270].map((deg) => (
+                                                    <button
+                                                        key={deg}
+                                                        onClick={() => handleRotationChange(deg)}
+                                                        className={`flex-1 py-1.5 rounded-lg text-xs font-body transition-all ${
+                                                            selectedRotationDeg === deg
+                                                                ? 'bg-sand-400 text-espresso-900'
+                                                                : 'bg-espresso-700 text-sand-300 hover:bg-espresso-600'
+                                                        }`}
+                                                    >
+                                                        {deg}°
+                                                    </button>
+                                                ))}
+                                            </div>
+
+                                            <button
+                                                onClick={() => setSelectedId(null)}
+                                                className="w-full py-1.5 rounded-lg text-xs font-body text-sand-400 hover:text-cream-50 border border-espresso-700 hover:border-sand-400 transition-all"
+                                            >
+                                                Deselect
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="bg-espresso-900 rounded-xl p-4 text-center border border-dashed border-espresso-700">
+                                            <p className="font-body text-xs text-sand-400">
+                                                Click a piece in the 3D view to select it, or add one below.
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {/* ── Catalog ── */}
+                                    <div>
+                                        <p className="font-body text-xs font-medium text-sand-400 uppercase tracking-widest mb-3">
+                                            Add Furniture
+                                        </p>
                                         <div className="grid grid-cols-2 gap-3">
                                             {FURNITURE_CATALOG.map((item) => (
                                                 <button
@@ -457,51 +684,46 @@ const RoomEditorPage = () => {
                                                     title={`Add ${item.label}`}
                                                     className="group flex flex-col items-center gap-2 bg-espresso-900 hover:bg-espresso-700 border border-espresso-700 hover:border-sand-400 rounded-xl p-3 transition-all"
                                                 >
-                                                    <div className="w-full aspect-square rounded-lg overflow-hidden bg-espresso-800">
-                                                        <img
-                                                            src={item.src}
-                                                            alt={item.label}
-                                                            className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-200"
-                                                        />
-                                                    </div>
-                                                    <span className="font-body text-xs text-sand-300 group-hover:text-cream-50 transition-colors text-center">
+                                                    <span className="text-3xl">{item.icon}</span>
+                                                    <span className="font-body text-xs text-sand-300 group-hover:text-cream-50 transition-colors text-center leading-tight">
                                                         {item.label}
                                                     </span>
-                                                    {/* Add badge */}
                                                     <span className="text-xs font-body text-sand-400 group-hover:text-sand-200 transition-colors">
-                                                        + Add
+                                                        + Place
                                                     </span>
                                                 </button>
                                             ))}
                                         </div>
                                     </div>
 
-                                    {/* Placed furniture list */}
+                                    {/* ── Placed items list ── */}
                                     {furnitureItems.length > 0 && (
                                         <div>
                                             <p className="font-body text-xs font-medium text-sand-400 uppercase tracking-widest mb-3">
-                                                Placed ({furnitureItems.length})
+                                                In Room ({furnitureItems.length})
                                             </p>
                                             <div className="space-y-2">
                                                 {furnitureItems.map((f) => (
                                                     <div
                                                         key={f.instanceId}
-                                                        className="flex items-center justify-between bg-espresso-900 rounded-lg px-3 py-2"
+                                                        onClick={() => setSelectedId(f.instanceId)}
+                                                        className={`flex items-center justify-between rounded-lg px-3 py-2 cursor-pointer transition-all ${
+                                                            f.instanceId === selectedId
+                                                                ? 'bg-sand-400/15 border border-sand-400/40'
+                                                                : 'bg-espresso-900 border border-transparent hover:border-espresso-600'
+                                                        }`}
                                                     >
                                                         <div className="flex items-center gap-2">
-                                                            <img
-                                                                src={f.src}
-                                                                alt={f.label}
-                                                                className="w-8 h-8 object-contain rounded"
-                                                            />
-                                                            <span className="font-body text-xs text-sand-300">{f.label}</span>
+                                                            <span className="text-base">{f.icon}</span>
+                                                            <div>
+                                                                <span className="font-body text-xs text-sand-300 block">{f.label}</span>
+                                                                <span className="font-mono text-xs text-sand-500">
+                                                                    ×{(f.scale ?? 1).toFixed(1)} · {Math.round(((f.rotationY ?? 0) * 180) / Math.PI)}°
+                                                                </span>
+                                                            </div>
                                                         </div>
                                                         <button
-                                                            onClick={() =>
-                                                                setFurnitureItems((prev) =>
-                                                                    prev.filter((item) => item.instanceId !== f.instanceId)
-                                                                )
-                                                            }
+                                                            onClick={(e) => { e.stopPropagation(); removeFurniture(f.instanceId); }}
                                                             className="text-sand-400 hover:text-red-400 transition-colors p-1"
                                                             title="Remove"
                                                         >

@@ -1,0 +1,8 @@
+Model Information:
+* title:	Sofa
+* source:	https://sketchfab.com/3d-models/sofa-8a89fc765c5f406f87b7ee93ba253f67
+* author:	MaX3Dd (https://sketchfab.com/MaX3Dd)
+
+Model License:
+* license type:	SKETCHFAB Standard (https://sketchfab.com/licenses)
+* requirements:	Under basic restrictions, use worldwide, on all types of media, commercially or not, and in all types of derivative works
