@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Suspense } from 'react';
 import api from '../utils/api';
 import RoomCanvas from '../components/room/RoomCanvas';
+import { buildExportScene, exportAsGLB, exportAsGLTF, exportAsOBJ } from '../utils/exportRoom3D';
 
 /* Room type labels */
 const ROOM_TYPE_LABELS = {
@@ -112,6 +113,25 @@ const RoomEditorPage = () => {
 
     const selectedItem = furnitureItems.find((f) => f.instanceId === selectedId) ?? null;
 
+    /* 3-D export state */
+    const [exportFormat,   setExportFormat]   = useState('glb');   // 'glb' | 'gltf' | 'obj'
+    const [exporting,      setExporting]      = useState(false);
+    const [exportProgress, setExportProgress] = useState(null);    // null | { loaded, total }
+    const [exportError,    setExportError]    = useState(null);
+    const [exportDropOpen, setExportDropOpen] = useState(false);
+    const exportDropRef = useRef(null);
+
+    /* Close format dropdown when clicking outside */
+    useEffect(() => {
+        const handler = (e) => {
+            if (exportDropRef.current && !exportDropRef.current.contains(e.target)) {
+                setExportDropOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, []);
+
     /* Data */
     useEffect(() => { fetchRoom(); }, [id]);
 
@@ -160,6 +180,56 @@ const RoomEditorPage = () => {
             alert('Failed to save changes.');
         } finally {
             setSaving(false);
+        }
+    };
+
+    /**
+     * Export the room as a 3-D file.
+     * If the room has unsaved changes it is auto-saved first, then the
+     * Three.js scene is built off-screen and downloaded in the chosen format.
+     */
+    const handleExport = async (fmt = exportFormat) => {
+        setExportDropOpen(false);
+        setExportError(null);
+
+        // 1. Auto-save if needed
+        if (!saved) {
+            setSaving(true);
+            try {
+                await api.put(`/rooms/${id}`, { ...room, furnitureItems });
+                setSaved(true);
+                setTimeout(() => setSaved(false), 2500);
+            } catch {
+                setSaving(false);
+                setExportError('Save failed. Cannot export unsaved room.');
+                return;
+            }
+            setSaving(false);
+        }
+
+        // 2. Build scene and export─
+        setExporting(true);
+        setExportProgress({ loaded: 0, total: furnitureItems.length || 1 });
+        try {
+            const scene = await buildExportScene(
+                room,
+                furnitureItems,
+                (loaded, total) => setExportProgress({ loaded, total }),
+            );
+            const safeName = (room.name || 'room').replace(/[^a-z0-9_-]/gi, '_');
+            if (fmt === 'gltf') {
+                await exportAsGLTF(scene, safeName);
+            } else if (fmt === 'obj') {
+                exportAsOBJ(scene, safeName);
+            } else {
+                await exportAsGLB(scene, safeName);
+            }
+        } catch (err) {
+            console.error('[Export3D]', err);
+            setExportError('Export failed. See console for details.');
+        } finally {
+            setExporting(false);
+            setExportProgress(null);
         }
     };
 
@@ -323,12 +393,12 @@ const RoomEditorPage = () => {
                     {/* Save */}
                     <button
                         onClick={handleSave}
-                        disabled={saving}
+                        disabled={saving || exporting}
                         className={`px-4 py-2 rounded-lg font-body text-sm font-medium transition-all flex items-center gap-2 ${
                             saved
                                 ? 'bg-sage-500 text-white'
                                 : 'bg-sand-400 hover:bg-sand-500 text-espresso-900'
-                        }`}
+                        } disabled:opacity-60 disabled:cursor-not-allowed`}
                     >
                         {saving ? (
                             <><div className="w-3.5 h-3.5 border-2 border-espresso-900 border-t-transparent rounded-full animate-spin" /> Saving</>
@@ -338,6 +408,107 @@ const RoomEditorPage = () => {
                             'Save Changes'
                         )}
                     </button>
+
+                    {/* Export 3D */}
+                    <div className="relative" ref={exportDropRef}>
+                        {/* Main export button + caret that opens format picker */}
+                        <div className="flex items-center rounded-lg overflow-hidden border border-indigo-500/60">
+                            <button
+                                id="btn-export-3d"
+                                onClick={() => handleExport()}
+                                disabled={exporting || saving}
+                                title={`Export room as .${exportFormat.toUpperCase()}`}
+                                className="flex items-center gap-2 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-body text-sm font-medium transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                                {exporting ? (
+                                    <>
+                                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                        {exportProgress
+                                            ? `${exportProgress.loaded}/${exportProgress.total} models…`
+                                            : 'Exporting…'}
+                                    </>
+                                ) : (
+                                    <>
+                                        {/* 3D box icon */}
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                                d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" />
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                                d="M3.27 6.96L12 12.01l8.73-5.05M12 22.08V12" />
+                                        </svg>
+                                        Export 3D <span className="opacity-70 text-xs">.{exportFormat}</span>
+                                    </>
+                                )}
+                            </button>
+                            {/* Format caret */}
+                            <button
+                                id="btn-export-format"
+                                onClick={() => setExportDropOpen((o) => !o)}
+                                disabled={exporting || saving}
+                                title="Choose export format"
+                                className="px-2 py-2 bg-indigo-700 hover:bg-indigo-600 text-white transition-all border-l border-indigo-500/60 disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                                <svg className={`w-3 h-3 transition-transform ${exportDropOpen ? 'rotate-180' : ''}`}
+                                    fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        {/* Format dropdown */}
+                        {exportDropOpen && (
+                            <div className="absolute right-0 top-full mt-1.5 w-52 bg-espresso-800 border border-espresso-700 rounded-xl shadow-2xl z-50 overflow-hidden">
+                                <p className="px-3 pt-2.5 pb-1 font-body text-xs text-sand-400 uppercase tracking-widest">Export format</p>
+                                {[
+                                    { fmt: 'glb',  label: 'Binary GLTF (.glb)',  desc: 'Best — compact, full materials' },
+                                    { fmt: 'gltf', label: 'JSON GLTF  (.gltf)',  desc: 'Text, compatible with most viewers' },
+                                    { fmt: 'obj',  label: 'Wavefront  (.obj)',   desc: 'Universal, no textures' },
+                                ].map(({ fmt, label, desc }) => (
+                                    <button
+                                        key={fmt}
+                                        onClick={() => { setExportFormat(fmt); setExportDropOpen(false); }}
+                                        className={`w-full text-left px-3 py-2.5 flex items-start gap-2.5 hover:bg-espresso-700 transition-colors ${
+                                            exportFormat === fmt ? 'bg-espresso-900/40' : ''
+                                        }`}
+                                    >
+                                        <span className={`mt-0.5 w-4 h-4 flex-shrink-0 rounded-full border-2 flex items-center justify-center ${
+                                            exportFormat === fmt ? 'border-espresso-400' : 'border-espresso-600'
+                                        }`}>
+                                            {exportFormat === fmt && <span className="w-2 h-2 rounded-full bg-espresso-400 block" />}
+                                        </span>
+                                        <span>
+                                            <span className="block font-body text-xs font-medium text-cream-50">{label}</span>
+                                            <span className="block font-body text-xs text-sand-400 mt-0.5">{desc}</span>
+                                        </span>
+                                    </button>
+                                ))}
+                                <div className="border-t border-espresso-700 px-3 py-2">
+                                    <button
+                                        onClick={() => handleExport(exportFormat)}
+                                        disabled={exporting}
+                                        className="w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-body text-xs font-medium transition-all disabled:opacity-60"
+                                    >
+                                        Export as .{exportFormat}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Inline error toast */}
+                        {exportError && (
+                            <div className="absolute right-0 top-full mt-1.5 w-60 bg-red-900/90 border border-red-700 rounded-xl px-3 py-2.5 z-50 text-xs font-body text-red-200 flex items-start gap-2">
+                                <svg className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span>{exportError}</span>
+                                <button onClick={() => setExportError(null)} className="ml-auto text-red-400 hover:text-red-200">
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </header>
 
