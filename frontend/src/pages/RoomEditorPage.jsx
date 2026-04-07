@@ -121,6 +121,9 @@ const RoomEditorPage = () => {
     const [exportDropOpen, setExportDropOpen] = useState(false);
     const exportDropRef = useRef(null);
 
+    /* Custom furniture file input ref */
+    const customFurnitureInputRef = useRef(null);
+
     /* Close format dropdown when clicking outside */
     useEffect(() => {
         const handler = (e) => {
@@ -251,6 +254,40 @@ const RoomEditorPage = () => {
         setSelectedId(newItem.instanceId);
         // Switch to design tab to reveal the controls immediately
         setPanelTab('design');
+    };
+
+    /* Custom Furniture Uploader */
+    const handleCustomFurnitureUpload = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const isObj = file.name.toLowerCase().endsWith('.obj');
+        const format = isObj ? 'obj' : 'gltf';
+        
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const dataUrl = event.target.result;
+            const newItem = {
+                instanceId:  `custom_${Date.now()}`,
+                furnitureId: `custom_${file.name}`,
+                label:       file.name.slice(0, 20) + (file.name.length > 20 ? '...' : ''),
+                icon:        isObj ? '📦' : '✨',
+                modelPath:   dataUrl,
+                format:      format,
+                x:         0,
+                z:         0,
+                scale:     1.0,
+                rotationY: 0,
+                positionY: 0,
+            };
+            setFurnitureItems((prev) => [...prev, newItem]);
+            setSelectedId(newItem.instanceId);
+            setPanelTab('design');
+        };
+        reader.readAsDataURL(file);
+
+        // Reset input so the same file could be selected again
+        e.target.value = '';
     };
 
     const handleFurnitureMove = useCallback((instanceId, x, z) => {
@@ -843,10 +880,38 @@ const RoomEditorPage = () => {
                                         </div>
                                     )}
 
+                                    {/* Custom Furniture Upload */}
+                                    <div>
+                                        <p className="font-body text-xs font-medium text-sand-400 uppercase tracking-widest mb-3">
+                                            Custom Furniture
+                                        </p>
+                                        <input
+                                            type="file"
+                                            accept=".glb,.gltf,.obj"
+                                            className="hidden"
+                                            onChange={handleCustomFurnitureUpload}
+                                            ref={customFurnitureInputRef}
+                                        />
+                                        <button
+                                            onClick={() => customFurnitureInputRef.current?.click()}
+                                            className="w-full group flex flex-col items-center justify-center gap-2 bg-espresso-900 hover:bg-espresso-700 border border-dashed border-espresso-600 hover:border-sand-400 rounded-xl p-4 transition-all"
+                                        >
+                                            <svg className="w-6 h-6 text-sand-400 group-hover:text-cream-50 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                            </svg>
+                                            <span className="font-body text-xs text-sand-300 group-hover:text-cream-50 transition-colors text-center leading-tight">
+                                                Upload 3D Model
+                                            </span>
+                                            <span className="text-[10px] font-body text-sand-500">
+                                                .glb, .gltf, .obj
+                                            </span>
+                                        </button>
+                                    </div>
+
                                     {/* Catalog */}
                                     <div>
                                         <p className="font-body text-xs font-medium text-sand-400 uppercase tracking-widest mb-3">
-                                            Add Furniture
+                                            Template Furniture
                                         </p>
                                         <div className="grid grid-cols-2 gap-3">
                                             {FURNITURE_CATALOG.map((item) => (

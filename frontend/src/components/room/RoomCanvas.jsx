@@ -1,6 +1,7 @@
 import { useRef, useEffect, useMemo, useCallback } from 'react';
-import { Canvas, useThree } from '@react-three/fiber';
+import { Canvas, useThree, useLoader } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, ContactShadows, useGLTF } from '@react-three/drei';
+import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import * as THREE from 'three';
 
 /* Wall */
@@ -78,8 +79,8 @@ const SelectionRing = ({ radius = 0.6 }) => (
     </mesh>
 );
 
-/* 3D GLtF furniture piece — draggable, scalable, rotatable, liftable */
-const FurnitureModel3D = ({ item, onMove, onSelect, orbitRef, roomBounds, roomHeight, isSelected }) => {
+/* Common logic for dragging, scaling, rotating any loaded model */
+const FurnitureModelLogic = ({ item, modelScene, onMove, onSelect, orbitRef, roomBounds, roomHeight, isSelected }) => {
     const groupRef    = useRef();
     const isDragging  = useRef(false);
     // Ref holds the XZ half-extents of the model's footprint at the current scale.
@@ -88,8 +89,6 @@ const FurnitureModel3D = ({ item, onMove, onSelect, orbitRef, roomBounds, roomHe
     const footprintRef = useRef({ hx: 0.4, hz: 0.4 });
 
     const { camera, gl, raycaster } = useThree();
-
-    const { scene: modelScene } = useGLTF(item.modelPath);
 
     // Clone so multiple instances can coexist
     const clonedScene = useMemo(() => {
@@ -203,6 +202,22 @@ const FurnitureModel3D = ({ item, onMove, onSelect, orbitRef, roomBounds, roomHe
             />
         </group>
     );
+};
+
+/* Format-specific wrappers */
+const GltfFurniture = (props) => {
+    const { scene } = useGLTF(props.item.modelPath);
+    return <FurnitureModelLogic {...props} modelScene={scene} />;
+};
+
+const ObjFurniture = (props) => {
+    const scene = useLoader(OBJLoader, props.item.modelPath);
+    return <FurnitureModelLogic {...props} modelScene={scene} />;
+};
+
+const FurnitureModel3D = (props) => {
+    const isObj = props.item.format === 'obj' || (props.item.modelPath && props.item.modelPath.endsWith('.obj'));
+    return isObj ? <ObjFurniture {...props} /> : <GltfFurniture {...props} />;
 };
 
 /* Main canvas── */
