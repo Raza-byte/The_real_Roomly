@@ -4,13 +4,13 @@ import { Suspense } from 'react';
 import api from '../utils/api';
 import RoomCanvas from '../components/room/RoomCanvas';
 
-/* ─── Room type labels ──────────────────────────────────────────────────── */
+/* Room type labels */
 const ROOM_TYPE_LABELS = {
     living_room: 'Living Room', bedroom: 'Bedroom', kitchen: 'Kitchen',
     bathroom: 'Bathroom', office: 'Office', empty: 'Empty Room',
 };
 
-/* ─── 3D Model Catalog (served from /public/models/) ───────────────────── */
+/* 3D Model Catalog (served from /public/models/) */
 const FURNITURE_CATALOG = [
     {
         furnitureId: 'sofa',
@@ -56,7 +56,7 @@ const FURNITURE_CATALOG = [
     },
 ];
 
-/* ─── Icons ─────────────────────────────────────────────────────────────── */
+/* Icons */
 const IconSettings = () => (
     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -70,7 +70,7 @@ const IconDesign = () => (
     </svg>
 );
 
-/* ─── Slider with label ─────────────────────────────────────────────────── */
+/* Slider with label */
 const LabeledSlider = ({ label, value, min, max, step, unit = '', onChange }) => (
     <div>
         <div className="flex justify-between items-center mb-1.5">
@@ -87,7 +87,7 @@ const LabeledSlider = ({ label, value, min, max, step, unit = '', onChange }) =>
     </div>
 );
 
-/* ─── RoomEditorPage ─────────────────────────────────────────────────────── */
+/* RoomEditorPage */
 const RoomEditorPage = () => {
     const { id }   = useParams();
     const navigate = useNavigate();
@@ -112,7 +112,7 @@ const RoomEditorPage = () => {
 
     const selectedItem = furnitureItems.find((f) => f.instanceId === selectedId) ?? null;
 
-    /* ── Data ── */
+    /* Data */
     useEffect(() => { fetchRoom(); }, [id]);
 
     const fetchRoom = async () => {
@@ -130,12 +130,12 @@ const RoomEditorPage = () => {
         }
     };
 
-    /* ── View mode ── */
+    /* View mode */
     const switchViewMode = (mode) => {
         setViewMode(mode);
     };
 
-    /* ── Room property handlers ── */
+    /* Room property handlers */
     const handleUpdate = (field, value) => {
         setRoom((prev) => ({ ...prev, [field]: value }));
         setSaved(false);
@@ -163,7 +163,7 @@ const RoomEditorPage = () => {
         }
     };
 
-    /* ── Furniture handlers ── */
+    /* Furniture handlers */
     const addFurniture = (catalogItem) => {
         const newItem = {
             instanceId:  `${catalogItem.furnitureId}_${Date.now()}`,
@@ -214,7 +214,7 @@ const RoomEditorPage = () => {
         );
     };
 
-    /* ── Individual wall colour ── */
+    /* Individual wall colour */
     const handleWallColorUpdate = (wall, color) => {
         setRoom((prev) => ({
             ...prev,
@@ -228,7 +228,7 @@ const RoomEditorPage = () => {
         if (selectedId === instanceId) setSelectedId(null);
     };
 
-    /* ── Loading ── */
+    /* Loading */
     if (loading) {
         return (
             <div className="min-h-screen bg-espresso-900 flex items-center justify-center">
@@ -246,7 +246,7 @@ const RoomEditorPage = () => {
         ? Math.round(((selectedItem.rotationY ?? 0) * 180) / Math.PI)
         : 0;
 
-    /* ────────────────────────────────────── */
+    / */
     return (
         <div className="h-screen bg-espresso-900 flex flex-col overflow-hidden">
 
@@ -587,7 +587,7 @@ const RoomEditorPage = () => {
                             {panelTab === 'design' && (
                                 <div className="p-5 space-y-5">
 
-                                    {/* ── Selected item controls ── */}
+                                    {/* Selected item controls */}
                                     {selectedItem ? (
                                         <div className="bg-espresso-900 rounded-xl p-4 space-y-4 border border-sand-400/20">
                                             <div className="flex items-center justify-between">
@@ -671,7 +671,7 @@ const RoomEditorPage = () => {
                                         </div>
                                     )}
 
-                                    {/* ── Catalog ── */}
+                                    {/* Catalog */}
                                     <div>
                                         <p className="font-body text-xs font-medium text-sand-400 uppercase tracking-widest mb-3">
                                             Add Furniture
@@ -696,7 +696,7 @@ const RoomEditorPage = () => {
                                         </div>
                                     </div>
 
-                                    {/* ── Placed items list ── */}
+                                    {/* Placed items list */}
                                     {furnitureItems.length > 0 && (
                                         <div>
                                             <p className="font-body text-xs font-medium text-sand-400 uppercase tracking-widest mb-3">

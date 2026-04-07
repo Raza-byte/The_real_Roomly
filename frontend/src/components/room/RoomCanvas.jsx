@@ -3,7 +3,7 @@ import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, ContactShadows, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 
-/* ─── Wall ─────────────────────────────────────────────────────────────── */
+/* Wall */
 const Wall = ({ position, rotation, width, height, color }) => (
     <mesh position={position} rotation={rotation} receiveShadow castShadow>
         <planeGeometry args={[width, height]} />
@@ -11,7 +11,7 @@ const Wall = ({ position, rotation, width, height, color }) => (
     </mesh>
 );
 
-/* ─── Floor ─────────────────────────────────────────────────────────────── */
+/* Floor */
 const Floor = ({ width, length, color }) => (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
         <planeGeometry args={[width, length]} />
@@ -19,7 +19,7 @@ const Floor = ({ width, length, color }) => (
     </mesh>
 );
 
-/* ─── Room box ───────────────────────────────────────────────────────────── */
+/* Room box */
 const Room3D = ({ dimensions, wallColor, wallColors = {}, floorColor, ceilingColor }) => {
     const { width, length, height } = dimensions;
     const hw = width / 2;
@@ -55,7 +55,7 @@ const Room3D = ({ dimensions, wallColor, wallColors = {}, floorColor, ceilingCol
     );
 };
 
-/* ─── Lighting ───────────────────────────────────────────────────────────── */
+/* Lighting */
 const Lighting = ({ roomHeight }) => (
     <>
         <ambientLight intensity={0.65} />
@@ -70,7 +70,7 @@ const Lighting = ({ roomHeight }) => (
     </>
 );
 
-/* ─── Selection ring rendered under the selected piece ───────────────────── */
+/* Selection ring rendered under the selected piece */
 const SelectionRing = ({ radius = 0.6 }) => (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
         <ringGeometry args={[radius * 0.85, radius, 48]} />
@@ -78,7 +78,7 @@ const SelectionRing = ({ radius = 0.6 }) => (
     </mesh>
 );
 
-/* ─── 3D GLtF furniture piece — draggable, scalable, rotatable, liftable ─── */
+/* 3D GLtF furniture piece — draggable, scalable, rotatable, liftable */
 const FurnitureModel3D = ({ item, onMove, onSelect, orbitRef, roomBounds, roomHeight, isSelected }) => {
     const groupRef    = useRef();
     const isDragging  = useRef(false);
@@ -205,7 +205,7 @@ const FurnitureModel3D = ({ item, onMove, onSelect, orbitRef, roomBounds, roomHe
     );
 };
 
-/* ─── Main canvas ─────────────────────────────────────────────────────────── */
+/* Main canvas── */
 const RoomCanvas = ({
     room,
     viewMode       = '3d',
