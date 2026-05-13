@@ -2,26 +2,26 @@
  * User Story 1: "As a user, I want to create an account so that I can save my designs."
  *
  * Acceptance Criteria:
- *   - Valid email + password  → account created (201)
- *   - Invalid input           → error message displayed (400)
+ *   - Valid email + password -> account created (201)
+ *   - Invalid input -> error message displayed (400)
  *
  * Test Cases covered:
- *   ✅ TC1 – Successful registration with valid email and password
- *   ✅ TC2 – Registration fails with duplicate email
- *   ✅ TC3 – Registration fails with invalid email format
- *   ✅ TC4 – Registration fails with missing / too-short password
- *   ✅ TC5 – Password is hashed before saving (not stored in plain text)
+ *   TC1 - Successful registration with valid email and password
+ *   TC2 - Registration fails with duplicate email
+ *   TC3 - Registration fails with invalid email format
+ *   TC4 - Registration fails with missing / too-short password
+ *   TC5 - Password is hashed before saving (not stored in plain text)
  */
 
-const request    = require('supertest');
-const mongoose   = require('mongoose');
+const request = require('supertest');
+const mongoose = require('mongoose');
 const { MongoMemoryServer } = require('mongodb-memory-server');
-const app        = require('../server');
-const User       = require('../models/User');
+const app = require('../app');J
+const User = require('../models/User');
 
 let mongoServer;
 
-// ─── Setup / Teardown ────────────────────────────────────────────────────────
+//  Setup 
 
 beforeAll(async () => {
   mongoServer = await MongoMemoryServer.create();
@@ -39,18 +39,18 @@ afterAll(async () => {
   await mongoServer.stop();
 });
 
-// ─── Helper ──────────────────────────────────────────────────────────────────
+//  Helper 
 
 const validPayload = {
-  name:     'Jane Designer',
-  email:    'jane@roomly.com',
+  name: 'Jane Designer',
+  email: 'jane@roomly.com',
   password: 'Secret123',
 };
 
 const post = (payload) =>
   request(app).post('/api/auth/register').send(payload);
 
-// ─── TC1: Successful Registration ────────────────────────────────────────────
+//  TC1: Successful Registration 
 
 describe('TC1 – Successful registration with valid email and password', () => {
   test('returns 201 with token and user object', async () => {
@@ -60,7 +60,7 @@ describe('TC1 – Successful registration with valid email and password', () => 
     expect(res.body.success).toBe(true);
     expect(res.body).toHaveProperty('token');
     expect(res.body.user).toMatchObject({
-      name:  validPayload.name,
+      name: validPayload.name,
       email: 'jane@roomly.com', // normalised to lowercase
     });
     expect(res.body.user).not.toHaveProperty('password');
@@ -74,7 +74,7 @@ describe('TC1 – Successful registration with valid email and password', () => 
   });
 });
 
-// ─── TC2: Duplicate Email ─────────────────────────────────────────────────────
+//  TC2: Duplicate Email 
 
 describe('TC2 – Registration fails with duplicate email', () => {
   test('returns 400 when email is already registered', async () => {
@@ -90,7 +90,7 @@ describe('TC2 – Registration fails with duplicate email', () => {
   });
 });
 
-// ─── TC3: Invalid Email Format ───────────────────────────────────────────────
+//  TC3: Invalid Email Format 
 
 describe('TC3 – Registration fails with invalid email format', () => {
   const invalidEmails = [
@@ -112,7 +112,7 @@ describe('TC3 – Registration fails with invalid email format', () => {
   );
 });
 
-// ─── TC4: Missing / Too-Short Password ───────────────────────────────────────
+//  TC4: Missing / Too-Short Password 
 
 describe('TC4 – Registration fails with missing required fields', () => {
   test('returns 400 when password is too short (< 6 chars)', async () => {
@@ -149,7 +149,7 @@ describe('TC4 – Registration fails with missing required fields', () => {
   });
 });
 
-// ─── TC5: Password is Hashed Before Saving ───────────────────────────────────
+//  TC5: Password is Hashed Before Saving 
 
 describe('TC5 – Password is hashed before saving', () => {
   test('stored password is not equal to the plaintext password', async () => {
